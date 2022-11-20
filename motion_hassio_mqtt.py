@@ -1,3 +1,4 @@
+import json
 import machine
 import time
 import network
@@ -14,10 +15,8 @@ btn = machine.Pin(1, machine.Pin.IN, machine.Pin.PULL_DOWN)
 r_led = machine.Pin(2, machine.Pin.OUT)
 m_sens = machine.Pin(3, machine.Pin.IN, machine.Pin.PULL_DOWN)
 
-# Collections
-leds = [sys_led, r_led, g_led]
-active = False
-last_active = False
+# Globals
+mqtt_client = None
 
 
 def wifi_connect():
@@ -56,47 +55,92 @@ def mqtt_connect():
     return client
 
 
-def mqtt_configure(mqtt_client):
-    configure_payload = b'{"name": "picow A Proximity", "device_class": "motion", "state_topic": "homeassistant/binary_sensor/picow_a_proximity/state", "unique_id": "picow_a_proximity"}'
-    mqtt_client.publish(b'homeassistant/binary_sensor/picow_a_proximity/config', configure_payload, retain=True, qos=1)
-    print('MQTT client sensors configured')
-
-
 def reconnect():
     print('Failed to connect to the MQTT Broker. Reconnecting...')
     time.sleep(5)
     machine.reset()
 
 
-async def update_status():
-    global active
-    if m_sens.value():
-        active = True
-        g_led.on()
-    else:
-        active = False
-        g_led.off()
-    await asyncio.sleep(1)
-    asyncio.create_task(update_status())
+def update_sensor_mqtt_state(sensor):
+    state_topic = 'homeassistant/{type}/{id}/state'.format(type=sensor.type, id=sensor.id)
+    mqtt_client.publish(state_topic.encode(), sensor.status.encode())
 
 
-async def main(mqtt_client):
-    global last_active
-    asyncio.create_task(update_status())
+def update_sensor_mqtt_config(sensor):
+    state_topic = 'homeassistant/{type}/{id}/state'.format(type=sensor.type, id=sensor.id)
+    config_topic = 'homeassistant/{type}/{id}/config'.format(type=sensor.type, id=sensor.id)
+    configure_payload = {
+        "name": sensor.name,
+        "device_class": sensor.device_class,
+        "state_topic": state_topic,
+        "unique_id": sensor.id
+    }
+    mqtt_client.publish(config_topic, json.dumps(configure_payload))
+
+
+async def update_sensor(sensor):
+    changed = sensor.check_status()
+    print("Check sensor status, sensor: {sensor}, status: {status}, changed: {changed}".format(sensor=sensor.id,status=str(sensor.status), changed=str(changed)))
+    if changed:
+        update_sensor_mqtt_state(sensor)
+    await asyncio.sleep_ms(sensor.poll_rate_ms)
+    asyncio.create_task(update_sensor(sensor))
+
+
+async def start_polling_sensors(sensors):
+    for sensor in sensors:
+        print("Starting poll")
+        asyncio.create_task(update_sensor(sensor))
     while True:
-        if last_active != active:
-            r_led.on()
-            last_active = active
-            mqtt_client.publish(b'homeassistant/binary_sensor/picow_a_proximity/state', b'ON' if active else b'OFF')
-            r_led.off()
-        await asyncio.sleep(1)
+        await asyncio.sleep(15)
 
+class Sensor:
+
+    def __init__(self, name, id, type, status_getter, device_class, poll_rate_ms=1000):
+        self.name = name
+        self.id = id
+        self.type = type
+        self.status_getter = status_getter
+        self.device_class = device_class
+        self.poll_rate_ms = poll_rate_ms
+        self.status = None
+        self.on_change_handlers = []
+
+    def check_status(self):
+        status = self.status_getter()
+        changed = status != self.status
+        if changed:
+            self.status = status
+            for handler in self.on_change_handlers:
+                handler(status, self)
+        return changed
+
+    def add_on_change_handler(self, handler):
+        self.on_change_handlers.append(handler)
+
+
+# Create our proximity sensor
+proximity_sensor = Sensor(
+    'Picow A Proximity',
+    'picow_a_proximity',
+    'binary_sensor',
+    (lambda: 'ON' if m_sens.value() else 'OFF'),
+    'motion',
+    2000
+)
+
+# Show the proximity sensor state via green LED
+proximity_sensor.add_on_change_handler((lambda val, sensor: g_led.value(val == 'ON')))
+
+# List to hold all our sensors
+sensors = [proximity_sensor]
 
 try:
     wifi_connect()
     mqtt_client = mqtt_connect()
-    mqtt_configure(mqtt_client)
-    asyncio.run(main(mqtt_client))
+    for sensor in sensors:
+        update_sensor_mqtt_config(sensor)
+    asyncio.run(start_polling_sensors(sensors))
 except OSError as e:
     reconnect()
 finally:

@@ -5,18 +5,26 @@ import network
 import uasyncio as asyncio
 from umqtt.simple import MQTTClient
 import config
+import ahtx0
 
 # https://mpython.readthedocs.io/en/master/library/mPython/umqtt.simple.html
 
-# Pins
+# LED Pins
 sys_led = machine.Pin("LED", machine.Pin.OUT)
 g_led = machine.Pin(0, machine.Pin.OUT)
-btn = machine.Pin(1, machine.Pin.IN, machine.Pin.PULL_DOWN)
 r_led = machine.Pin(2, machine.Pin.OUT)
+# Input/IO Pins
+btn = machine.Pin(1, machine.Pin.IN, machine.Pin.PULL_DOWN)
 m_sens = machine.Pin(3, machine.Pin.IN, machine.Pin.PULL_DOWN)
+th_sda = machine.Pin(16) # th = temp+humidity (AHT20)
+th_scl = machine.Pin(17)
 
 # Globals
 mqtt_client = None
+
+# Busses & Wrapped Sensors
+i2c0 = machine.I2C(0, sda=th_sda, scl=th_scl, freq=400000)
+th_sensor = ahtx0.AHT10(i2c0)
 
 
 def wifi_connect():
@@ -77,8 +85,11 @@ def update_sensor_mqtt_config(sensor):
     
     if sensor.device_class:
         configure_payload["device_class"] = sensor.device_class
-    
-    mqtt_client.publish(config_topic, json.dumps(configure_payload))
+        
+    if sensor.unit_of_measurement:
+        configure_payload["unit_of_measurement"] = sensor.unit_of_measurement
+
+    mqtt_client.publish(config_topic.encode(), json.dumps(configure_payload).encode())
 
 
 async def update_sensor(sensor):
@@ -99,15 +110,16 @@ async def start_polling_sensors(sensors):
 
 class Sensor:
 
-    def __init__(self, name, id, type, status_getter, device_class, poll_rate_ms=1000):
+    def __init__(self, name, id, type, status_getter, device_class='', unit_of_measurement='', poll_rate_ms=1000):
         self.name = name
         self.id = id
-        self.type = type
+        self.type = type # https://www.home-assistant.io/integrations/mqtt/#mqtt-discovery
         self.status_getter = status_getter
-        self.device_class = device_class
+        self.device_class = device_class # https://www.home-assistant.io/integrations/sensor/#device-class
         self.poll_rate_ms = poll_rate_ms
         self.status = None
         self.on_change_handlers = []
+        self.unit_of_measurement = unit_of_measurement
 
     def check_status(self):
         status = self.status_getter()
@@ -122,38 +134,58 @@ class Sensor:
         self.on_change_handlers.append(handler)
 
 
-# Create our proximity sensor
+# Sensor Configuration
+
 proximity_sensor = Sensor(
-    'Picow A Proximity',
-    'picow_a_proximity',
-    'binary_sensor',
-    (lambda: 'ON' if m_sens.value() else 'OFF'),
-    'motion',
-    2000
+    name='Picow A Proximity',
+    id='picow_a_proximity',
+    type='binary_sensor',
+    status_getter=(lambda: 'ON' if m_sens.value() else 'OFF'),
+    device_class='motion',
+    poll_rate_ms=2000
 )
 
-# Create our button sensor
 button_sensor = Sensor(
-    'Picow A Button',
-    'picow_a_button',
-    'binary_sensor',
-    (lambda: 'ON' if btn.value() else 'OFF'),
-    '',
-    2000
+    name='Picow A Button',
+    id='picow_a_button',
+    type='binary_sensor',
+    status_getter=(lambda: 'ON' if btn.value() else 'OFF'),
+    poll_rate_ms=2000
 )
+
+temp_sensor = Sensor(
+    name='Picow A Temperature',
+    id='picow_a_temp',
+    type='sensor',
+    status_getter=(lambda: ("%.2f" % th_sensor.temperature)),
+    device_class='temperature',
+    poll_rate_ms=60000,
+    unit_of_measurement='°C'
+)
+
+humidity_sensor = Sensor(
+    name='Picow A Relative Humidity',
+    id='picow_a_rh',
+    type='sensor',
+    status_getter=(lambda: ("%.2f" % th_sensor.relative_humidity)),
+    device_class='humidity',
+    poll_rate_ms=60000,
+    unit_of_measurement='%'
+)
+
+# List to hold all our sensors
+sensors = [proximity_sensor, button_sensor, temp_sensor, humidity_sensor]
 
 # Show the proximity sensor state via green LED
 proximity_sensor.add_on_change_handler((lambda val, sensor: g_led.value(val == 'ON')))
 # Show the button sensor state via green LED
 button_sensor.add_on_change_handler((lambda val, sensor: r_led.value(val == 'ON')))
 
-# List to hold all our sensors
-sensors = [proximity_sensor, button_sensor]
-
 try:
     wifi_connect()
     mqtt_client = mqtt_connect()
     for sensor in sensors:
+        print(sensor.id)
         update_sensor_mqtt_config(sensor)
     asyncio.run(start_polling_sensors(sensors))
 except OSError as e:

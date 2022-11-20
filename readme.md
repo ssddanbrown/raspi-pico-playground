@@ -30,3 +30,23 @@ Communication with HomeAssistant is done over MQTT. Here's a quick high-level re
 - [Python Syntax](https://learnxinyminutes.com/docs/python/)
 - MicroPython MQTT [docs](https://mpython.readthedocs.io/en/master/library/mPython/umqtt.simple.html) / [repo](https://github.com/micropython/micropython-lib/tree/master/micropython/umqtt.simple)
 - [Home Assistant MQTT Docs](https://www.home-assistant.io/integrations/mqtt/#mqtt-discovery)
+- [Useful video on power usage & modes](https://youtu.be/GqmnV_T4yAU?t=327)
+
+### Components
+
+##### DHT20 Temperature Sensor
+
+- I2C address 0x38 (cannot be changed), 56 decimal
+- 2.5V to 5.5V power and logic level
+- Pin order from Left to Right (Looking at side with holes): Power, SDA, Ground, SCL
+- Built in 4.7K I2C pullup resistors.
+- Usage Humidity: 0... 100%RH
+- Usage Temperature: -40ºC – 80ºC
+- Typical accuracy of ±2% relative humidity, and ±0.3 °C at 20-80% RH and 20-60 °C
+- Overall accuracy of ±3% relative humidity, and ±0.5 °C
+- Temp conversion: t(°C) = (signal/2^20)*200-50
+- Humidity conversion: rh% = (signal/2^20)*100
+
+
+Added `ahtx0.py` file into this repo since I had issues downloading it as a library.
+This does much of the heavily lifting since raw ic2 communication requires a back and forth conversation of bytes to initiate and request data for reading.

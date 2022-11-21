@@ -25,9 +25,36 @@ Communication with HomeAssistant is done over MQTT. Here's a quick high-level re
     - This needs certain json, as per home assistant docs.
   - A separate topic, as defined in the config data, will handle the state/sensor-data. 
 
+### Connecting & Files
+
+- The pico will it's `main.py` script as soon as it gets power.
+- Can use `minicom -o -D /dev/ttyACM0` to open up a terminal into the MicroPython environment directly on the pi.
+- [Rshell](https://github.com/dhylands/rshell) seems to provide a higher-level interface:
+  - Connect with `rshell --buffer-size=512 -p /dev/ttyACM0`
+  - Once connected, list out boards via `boards`. Seems to be called `pyboard`.
+  - File operations then done by name like `ls /pyboard`.
+  - Can get to REPL via `repl` command; Exit via `Ctrl+X`.
+
+You can use rshell to upload, and run a file in a REPL (To see output) like so:
+
+```shell
+rshell --buffer-size=512 --quiet -p /dev/ttyACM0 "cp file.py /pyboard/dev.py; repl ~ import dev"
+# Use Ctrl+X to exit
+```
+
+For uploading a file for normal usage, you can use:
+
+```shell
+rshell --buffer-size=512 --quiet -p /dev/ttyACM0 "cp file.py /pyboard/main.py; repl ~ import machine ~ machine.reset() ~"
+```
+
+I tried to get the above integrated with PyCharm's run/debug options, but it was a painful process and I could not come up with something better than running the above in the pycharm terminal, outside of wrapping the above in some `flash_*.sh` shell scripts for easier running.
+
 ### Resources
 
+- [Raspberry Pi Python PDF](https://datasheets.raspberrypi.com/pico/raspberry-pi-pico-python-sdk.pdf)
 - [Python Syntax](https://learnxinyminutes.com/docs/python/)
+- [MicroPython RP2 docs](https://docs.micropython.org/en/latest/rp2/quickref.html)
 - MicroPython MQTT [docs](https://mpython.readthedocs.io/en/master/library/mPython/umqtt.simple.html) / [repo](https://github.com/micropython/micropython-lib/tree/master/micropython/umqtt.simple)
 - [Home Assistant MQTT Docs](https://www.home-assistant.io/integrations/mqtt/#mqtt-discovery)
 - [Useful video on power usage & modes](https://youtu.be/GqmnV_T4yAU?t=327)

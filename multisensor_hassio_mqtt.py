@@ -93,20 +93,21 @@ def update_sensor_mqtt_config(sensor):
 
 
 async def update_sensor(sensor):
-    changed = sensor.check_status()
-    # print("Check sensor status, sensor: {sensor}, status: {status}, changed: {changed}".format(sensor=sensor.id,status=str(sensor.status), changed=str(changed)))
-    if changed:
-        update_sensor_mqtt_state(sensor)
-    await asyncio.sleep_ms(sensor.poll_rate_ms)
-    asyncio.create_task(update_sensor(sensor))
+    while True:
+        changed = sensor.check_status()
+        # print("Check sensor status, sensor: {sensor}, status: {status}, changed: {changed}".format(sensor=sensor.id,status=str(sensor.status), changed=str(changed)))
+        if changed:
+            update_sensor_mqtt_state(sensor)
+        await asyncio.sleep_ms(sensor.poll_rate_ms)
 
 
 async def start_polling_sensors(sensors):
-    for sensor in sensors:
-        print("Starting poll")
+    for index, sensor in enumerate(sensors):
+        print("Creating poll for {} every {}ms".format(sensor.name, sensor.poll_rate_ms))
         asyncio.create_task(update_sensor(sensor))
     while True:
-        await asyncio.sleep(15)
+        await asyncio.sleep_ms(15000)
+                
 
 class Sensor:
 
@@ -142,7 +143,7 @@ proximity_sensor = Sensor(
     type='binary_sensor',
     status_getter=(lambda: 'ON' if m_sens.value() else 'OFF'),
     device_class='motion',
-    poll_rate_ms=2000
+    poll_rate_ms=2
 )
 
 button_sensor = Sensor(
@@ -150,7 +151,7 @@ button_sensor = Sensor(
     id='picow_a_button',
     type='binary_sensor',
     status_getter=(lambda: 'ON' if btn.value() else 'OFF'),
-    poll_rate_ms=2000
+    poll_rate_ms=2
 )
 
 temp_sensor = Sensor(
@@ -180,6 +181,7 @@ sensors = [proximity_sensor, button_sensor, temp_sensor, humidity_sensor]
 proximity_sensor.add_on_change_handler((lambda val, sensor: g_led.value(val == 'ON')))
 # Show the button sensor state via green LED
 button_sensor.add_on_change_handler((lambda val, sensor: r_led.value(val == 'ON')))
+button_sensor.add_on_change_handler((lambda val, sensor: print("Button changed to " + val)))
 
 try:
     wifi_connect()

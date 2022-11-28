@@ -4,6 +4,8 @@ This is a personal playground for messing about with the Raspberry Pi Pico W.
 This will contain my scripts and notes as I go.
 Much of this will be messy and might not even work. I don't really know python either, and I'm bad at electronics. No details of wiring in here either, would need to assume based on pin usage. 
 
+Devices built have their own folders with their current script state, and readme to document that specific device.
+
 ### Variables
 
 Common variables and secrets should be within a `config.py` file. This will need to be uploaded to the Pico before running any scripts that depend on it. An example with all variables can be found in `config.example.py`.

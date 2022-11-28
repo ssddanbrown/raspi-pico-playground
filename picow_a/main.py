@@ -2,7 +2,6 @@ import json
 import machine
 import time
 import network
-import uasyncio as asyncio
 from umqtt.simple import MQTTClient
 import config
 import ahtx0
@@ -23,7 +22,7 @@ btn = machine.Pin(1, machine.Pin.IN, machine.Pin.PULL_DOWN)
 m_sens = machine.Pin(18, machine.Pin.IN, machine.Pin.PULL_DOWN)
 
 th_pow = machine.Pin(10, machine.Pin.OUT, None, value=1)
-th_sda = machine.Pin(20) # th = temp+humidity (AHT20)
+th_sda = machine.Pin(20)  # th = temp+humidity (AHT20)
 th_scl = machine.Pin(21)
 
 # Globals
@@ -34,10 +33,12 @@ i2c0 = machine.I2C(0, sda=th_sda, scl=th_scl, freq=100000)
 th_sensor = ahtx0.AHT10(i2c0)
 
 
+# Wifi & MQTT
+
 def wifi_connect():
     wlan = network.WLAN(network.STA_IF)
     wlan.active(True)
-    #wlan.config(pm=0xa11140)  # Disable power-save mode
+    # wlan.config(pm=0xa11140)  # Disable power-save mode
     wlan.connect(config.wifi_ssid, config.wifi_pass)
     # Wait for connect or fail
     max_wait = 10
@@ -65,7 +66,7 @@ def mqtt_connect():
         user=config.mqtt_user,
         password=config.mqtt_pass
     )
-    client.connect()
+    client.connect(True)
     print('Connected to %s MQTT Broker' % (config.mqtt_server))
     return client
 
@@ -74,6 +75,51 @@ def reconnect():
     print('Failed to connect to the MQTT Broker. Reconnecting...')
     time.sleep(5)
     machine.reset()
+
+
+# Button and light handling
+
+lights_enabled = True
+button_down_at = None
+button_state = 0
+
+
+def button_handler(pin):
+    global button_down_at
+    global lights_enabled
+    global button_state
+    
+    if btn.value() == button_state:
+        return
+    button_state = btn.value()
+    
+    if button_state:
+            global button_down_at
+            button_down_at = time.ticks_ms()   
+    else:    
+        press_time = time.ticks_diff(time.ticks_ms(), button_down_at)
+
+        if press_time > 3000:
+            print("Resetting device due to long button press")
+            for i in range(2):
+                r_led.on()
+                time.sleep(1)
+                r_led.off()
+                time.sleep(1)
+            machine.reset()
+        else:
+            # Toggle lights on short press
+            lights_enabled = not lights_enabled
+            print("Toggling lights {} from button press".format("on" if lights_enabled else "off"))
+            r_led.value(lights_enabled)
+            g_led.off()
+            sys_led.off()
+
+
+btn.irq(handler=button_handler, trigger=machine.Pin.IRQ_RISING|machine.Pin.IRQ_FALLING)
+r_led.on()
+
+# Sensor logic
 
 
 def update_sensor_mqtt_state(sensor):
@@ -93,44 +139,31 @@ def update_sensor_mqtt_config(sensor):
             "identifiers": [device_id]
         }
     }
-    
+
     if sensor.device_class:
         configure_payload["device_class"] = sensor.device_class
-        
+
     if sensor.unit_of_measurement:
         configure_payload["unit_of_measurement"] = sensor.unit_of_measurement
 
     mqtt_client.publish(config_topic.encode(), json.dumps(configure_payload).encode())
 
 
-async def update_sensor(sensor):
-    while True:
-        changed = sensor.check_status()
-        # print("Check sensor status, sensor: {sensor}, status: {status}, changed: {changed}".format(sensor=sensor.id,status=str(sensor.status), changed=str(changed)))
-        if changed:
-            update_sensor_mqtt_state(sensor)
-        await asyncio.sleep_ms(sensor.poll_rate_ms)
+def update_sensor(sensor):
+    changed = sensor.check_status()
+    #print("Check sensor status, sensor: {sensor}, status: {status}, changed: {changed}".format(sensor=sensor.id,status=str(sensor.status), changed=str(changed)))
+    if changed:
+        update_sensor_mqtt_state(sensor)
 
-
-async def start_polling_sensors(sensors):
-    for index, sensor in enumerate(sensors):
-        print("Creating poll for {} every {}ms".format(sensor.name, sensor.poll_rate_ms))
-        asyncio.create_task(update_sensor(sensor))
-    while True:
-        sys_led.on()
-        await asyncio.sleep_ms(500)
-        sys_led.off()
-        await asyncio.sleep_ms(15000)
-                
 
 class Sensor:
 
     def __init__(self, name, id, type, status_getter, device_class='', unit_of_measurement='', poll_rate_ms=1000):
         self.name = name
         self.id = id
-        self.type = type # https://www.home-assistant.io/integrations/mqtt/#mqtt-discovery
+        self.type = type  # https://www.home-assistant.io/integrations/mqtt/#mqtt-discovery
         self.status_getter = status_getter
-        self.device_class = device_class # https://www.home-assistant.io/integrations/sensor/#device-class
+        self.device_class = device_class  # https://www.home-assistant.io/integrations/sensor/#device-class
         self.poll_rate_ms = poll_rate_ms
         self.status = None
         self.on_change_handlers = []
@@ -157,15 +190,7 @@ proximity_sensor = Sensor(
     type='binary_sensor',
     status_getter=(lambda: 'ON' if m_sens.value() else 'OFF'),
     device_class='motion',
-    poll_rate_ms=2000
-)
-
-button_sensor = Sensor(
-    name=device_name + ' Button',
-    id=device_id + '_button',
-    type='binary_sensor',
-    status_getter=(lambda: 'ON' if btn.value() else 'OFF'),
-    poll_rate_ms=1000
+    poll_rate_ms=500
 )
 
 temp_sensor = Sensor(
@@ -189,23 +214,54 @@ humidity_sensor = Sensor(
 )
 
 # List to hold all our sensors
-sensors = [proximity_sensor, button_sensor, temp_sensor, humidity_sensor]
+sensors = [proximity_sensor, temp_sensor, humidity_sensor]
 
 # Show the proximity sensor state via green LED
-proximity_sensor.add_on_change_handler((lambda val, sensor: g_led.value(val == 'ON')))
+proximity_sensor.add_on_change_handler((lambda val, sensor: g_led.value(lights_enabled and val == 'ON')))
 proximity_sensor.add_on_change_handler((lambda val, sensor: print("Proximity:" + val)))
-# Show the button sensor state via green LED
-button_sensor.add_on_change_handler((lambda val, sensor: r_led.value(val == 'ON')))
-button_sensor.add_on_change_handler((lambda val, sensor: print("Button:" + val)))
 
 try:
     wifi_connect()
     mqtt_client = mqtt_connect()
+    sensor_check_times = []
+    last_sys_led_change = time.ticks_ms()
+
+    # Update sensor config
     for sensor in sensors:
-        print(sensor.id)
         update_sensor_mqtt_config(sensor)
-    asyncio.run(start_polling_sensors(sensors))
+        update_sensor(sensor)
+        sensor_check_times.append(time.ticks_ms())
+
+    # Poll sensors
+    while True:
+        time.sleep(1)
+        now = time.ticks_ms()
+        sensor_next_polls = []
+
+        # Toggle sys led to indicate activity, limited to half-second changes at minimum
+        # so flashing is visible.
+        if lights_enabled and time.ticks_diff(now, last_sys_led_change) > 200:
+            sys_led.value(not sys_led.value())
+            last_sys_led_change = time.ticks_ms()
+            
+        # We update each sensor, if it's time, and store the expected time
+        # until we next need to poll the sensor.
+        for index, sensor in enumerate(sensors):
+            last_check = sensor_check_times[index]
+            check_delta = time.ticks_diff(now, last_check)
+            time_to_poll =  sensor.poll_rate_ms - check_delta
+            #print("check for {}, delta: {}, poll_rate: {}, ttp: {}".format(sensor.id, check_delta, sensor.poll_rate_ms, time_to_poll))
+            if time_to_poll <= 0:
+                update_sensor(sensor)
+                time_to_poll = sensor.poll_rate_ms
+                sensor_check_times[index] = now
+            sensor_next_polls.append(time_to_poll)
+
+
+        # We look to the minimum next poll and attempt to sleep until then
+        next_poll = min(sensor_next_polls)
+        if next_poll > 0:
+            time.sleep_ms(next_poll)
+
 except OSError as e:
     reconnect()
-finally:
-    asyncio.new_event_loop()

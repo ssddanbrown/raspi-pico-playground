@@ -52,6 +52,19 @@ rshell --buffer-size=512 --quiet -p /dev/ttyACM0 "cp file.py /pyboard/main.py; r
 
 I tried to get the above integrated with PyCharm's run/debug options, but it was a painful process and I could not come up with something better than running the above in the pycharm terminal, outside of wrapping the above in some `flash_*.sh` shell scripts for easier running.
 
+### C Usage
+
+Ubuntu setup:
+
+```bash
+sudo apt install cmake gcc-arm-none-eabi libnewlib-arm-none-eabi build-essential libstdc++-arm-none-eabi-newlib
+
+# Then copied cmake (https://raw.githubusercontent.com/raspberrypi/pico-sdk/master/external/pico_sdk_import.cmake) file to project.
+# Then created a `CMakeLists.txt` file to utilize this.
+```
+
+Note: Started going down this route, stopped and gone back to Python for a bit.
+
 ### Resources
 
 - [Raspberry Pi Python PDF](https://datasheets.raspberrypi.com/pico/raspberry-pi-pico-python-sdk.pdf)

@@ -1,5 +1,5 @@
 import machine
-import ahtx0
+from libraries import ahtx0
 import time
 
 th_sda = machine.Pin(16)

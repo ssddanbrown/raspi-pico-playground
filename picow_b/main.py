@@ -6,32 +6,31 @@ from umqtt.simple import MQTTClient
 import config
 
 # TODO - Replace usage with SCD41 Sensor
-import ahtx0
-
+from libraries import ahtx0
 
 device_name = 'Picow B'
 device_id = device_name.lower().replace(' ', '_')
 
 # LED Pins
 sys_led = machine.Pin("LED", machine.Pin.OUT)
-g_led = machine.Pin(22, machine.Pin.OUT)
-r_led = machine.Pin(28, machine.Pin.OUT)
-g_led.off()
+w_led = machine.Pin(17, machine.Pin.OUT)
+r_led = machine.Pin(16, machine.Pin.OUT)
+w_led.off()
 
 # Input/IO Pins
-btn = machine.Pin(1, machine.Pin.IN, machine.Pin.PULL_DOWN)
-m_sens = machine.Pin(18, machine.Pin.IN, machine.Pin.PULL_DOWN)
+btn = machine.Pin(18, machine.Pin.IN, machine.Pin.PULL_DOWN)
+m_sens = machine.Pin(0, machine.Pin.IN, machine.Pin.PULL_DOWN)
 
-th_pow = machine.Pin(10, machine.Pin.OUT, None, value=1)
-th_sda = machine.Pin(20)  # th = temp+humidity (AHT20)
-th_scl = machine.Pin(21)
+#thc_pow = machine.Pin(10, machine.Pin.OUT, None, value=1)
+thc_sda = machine.Pin(14)  # thc = temp+humidity+CO2 (SCD41)
+thc_scl = machine.Pin(15)
 
 # Globals
 mqtt_client = None
 
 # Busses & Wrapped Sensors
-i2c0 = machine.I2C(0, sda=th_sda, scl=th_scl, freq=100000)
-th_sensor = ahtx0.AHT10(i2c0)
+i2c0 = machine.I2C(1, sda=thc_sda, scl=thc_scl, freq=100000)
+thc_sensor = ahtx0.AHT10(i2c0)
 
 
 # Wifi & MQTT
@@ -113,7 +112,7 @@ def button_handler(pin):
             lights_enabled = not lights_enabled
             print("Toggling lights {} from button press".format("on" if lights_enabled else "off"))
             r_led.value(lights_enabled)
-            g_led.off()
+            w_led.off()
             sys_led.off()
 
 
@@ -198,7 +197,7 @@ temp_sensor = Sensor(
     name=device_name + ' Temperature',
     id=device_id + '_temp',
     type='sensor',
-    status_getter=(lambda: ("%.2f" % th_sensor.temperature)),
+    status_getter=(lambda: ("%.2f" % thc_sensor.temperature)),
     device_class='temperature',
     poll_rate_ms=60000,
     unit_of_measurement='°C'
@@ -208,7 +207,7 @@ humidity_sensor = Sensor(
     name=device_name + ' Relative Humidity',
     id=device_id + '_rh',
     type='sensor',
-    status_getter=(lambda: ("%.2f" % th_sensor.relative_humidity)),
+    status_getter=(lambda: ("%.2f" % thc_sensor.relative_humidity)),
     device_class='humidity',
     poll_rate_ms=60000,
     unit_of_measurement='%'
@@ -218,7 +217,7 @@ humidity_sensor = Sensor(
 sensors = [proximity_sensor, temp_sensor, humidity_sensor]
 
 # Show the proximity sensor state via green LED
-proximity_sensor.add_on_change_handler((lambda val, sensor: g_led.value(lights_enabled and val == 'ON')))
+proximity_sensor.add_on_change_handler((lambda val, sensor: w_led.value(lights_enabled and val == 'ON')))
 proximity_sensor.add_on_change_handler((lambda val, sensor: print("Proximity:" + val)))
 
 try:

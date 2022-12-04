@@ -5,7 +5,7 @@ import network
 import uasyncio as asyncio
 from umqtt.simple import MQTTClient
 import config
-import ahtx0
+from libraries import ahtx0
 
 # https://mpython.readthedocs.io/en/master/library/mPython/umqtt.simple.html
 

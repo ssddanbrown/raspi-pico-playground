@@ -60,7 +60,7 @@ def wifi_connect():
 
 def mqtt_connect():
     client = MQTTClient(
-        config.mqtt_client_id,
+        device_id,
         config.mqtt_server,
         keepalive=3600,
         user=config.mqtt_user,

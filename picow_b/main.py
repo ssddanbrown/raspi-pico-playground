@@ -5,8 +5,8 @@ import network
 from umqtt.simple import MQTTClient
 import config
 
-# TODO - Replace usage with SCD41 Sensor
-from libraries import ahtx0
+from libraries.scd41 import SCD41
+from libraries.hd44780 import HD44780
 
 device_name = 'Picow B'
 device_id = device_name.lower().replace(' ', '_')
@@ -21,16 +21,24 @@ w_led.off()
 btn = machine.Pin(18, machine.Pin.IN, machine.Pin.PULL_DOWN)
 m_sens = machine.Pin(0, machine.Pin.IN, machine.Pin.PULL_DOWN)
 
-#thc_pow = machine.Pin(10, machine.Pin.OUT, None, value=1)
+lcd_rs = machine.Pin(6, machine.Pin.OUT)
+lcd_enable = machine.Pin(7, machine.Pin.OUT)
+lcd_data4 = machine.Pin(8, machine.Pin.OUT)
+lcd_data5 = machine.Pin(9, machine.Pin.OUT)
+lcd_data6 = machine.Pin(10, machine.Pin.OUT)
+lcd_data7 = machine.Pin(11, machine.Pin.OUT)
+
+# thc_pow = machine.Pin(10, machine.Pin.OUT, None, value=1)
 thc_sda = machine.Pin(14)  # thc = temp+humidity+CO2 (SCD41)
 thc_scl = machine.Pin(15)
 
 # Globals
 mqtt_client = None
 
-# Busses & Wrapped Sensors
-i2c0 = machine.I2C(1, sda=thc_sda, scl=thc_scl, freq=100000)
-thc_sensor = ahtx0.AHT10(i2c0)
+# Busses & Sensor/Component Instances
+i2c1 = machine.I2C(1, sda=thc_sda, scl=thc_scl, freq=100000)
+thc_sensor = SCD41(i2c1)
+display = HD44780(lcd_rs, lcd_enable, lcd_data4, lcd_data5, lcd_data6, lcd_data7)
 
 
 # Wifi & MQTT
@@ -60,7 +68,7 @@ def wifi_connect():
 
 def mqtt_connect():
     client = MQTTClient(
-        config.mqtt_client_id,
+        device_id,
         config.mqtt_server,
         keepalive=3600,
         user=config.mqtt_user,
@@ -88,15 +96,15 @@ def button_handler(pin):
     global button_down_at
     global lights_enabled
     global button_state
-    
+
     if btn.value() == button_state:
         return
     button_state = btn.value()
-    
+
     if button_state:
-            global button_down_at
-            button_down_at = time.ticks_ms()   
-    else:    
+        global button_down_at
+        button_down_at = time.ticks_ms()
+    else:
         press_time = time.ticks_diff(time.ticks_ms(), button_down_at)
 
         if press_time > 3000:
@@ -107,7 +115,7 @@ def button_handler(pin):
                 r_led.off()
                 time.sleep(1)
             machine.reset()
-        else:
+        elif press_time > 100:
             # Toggle lights on short press
             lights_enabled = not lights_enabled
             print("Toggling lights {} from button press".format("on" if lights_enabled else "off"))
@@ -116,8 +124,9 @@ def button_handler(pin):
             sys_led.off()
 
 
-btn.irq(handler=button_handler, trigger=machine.Pin.IRQ_RISING|machine.Pin.IRQ_FALLING)
+btn.irq(handler=button_handler, trigger=machine.Pin.IRQ_RISING | machine.Pin.IRQ_FALLING)
 r_led.on()
+
 
 # Sensor logic
 
@@ -151,7 +160,7 @@ def update_sensor_mqtt_config(sensor):
 
 def update_sensor(sensor):
     changed = sensor.check_status()
-    #print("Check sensor status, sensor: {sensor}, status: {status}, changed: {changed}".format(sensor=sensor.id,status=str(sensor.status), changed=str(changed)))
+    # print("Check sensor status, sensor: {sensor}, status: {status}, changed: {changed}".format(sensor=sensor.id,status=str(sensor.status), changed=str(changed)))
     if changed:
         update_sensor_mqtt_state(sensor)
 
@@ -213,12 +222,42 @@ humidity_sensor = Sensor(
     unit_of_measurement='%'
 )
 
+carbon_dioxide_sensor = Sensor(
+    name=device_name + ' CO2',
+    id=device_id + '_co2',
+    type='sensor',
+    status_getter=(lambda: ("%d" % thc_sensor.carbon_dioxide)),
+    device_class='carbon_dioxide',
+    poll_rate_ms=60000,
+    unit_of_measurement='ppm'
+)
+
 # List to hold all our sensors
-sensors = [proximity_sensor, temp_sensor, humidity_sensor]
+sensors = [proximity_sensor, temp_sensor, humidity_sensor, carbon_dioxide_sensor]
 
 # Show the proximity sensor state via green LED
 proximity_sensor.add_on_change_handler((lambda val, sensor: w_led.value(lights_enabled and val == 'ON')))
 proximity_sensor.add_on_change_handler((lambda val, sensor: print("Proximity:" + val)))
+
+
+# Display handling logic
+last_display_str = ""
+
+
+def update_display_with_sensor_status():
+    global last_display_str
+    display_str = "T {0:.1f}, RH {1:.1f}\nCO2 {2}ppm   {3}{4}".format(
+        float(temp_sensor.status),
+        float(humidity_sensor.status),
+        carbon_dioxide_sensor.status,
+        "\x21" if (proximity_sensor.status is "ON") else " ",
+        "\x2A" if lights_enabled else " "
+    )
+
+    if display_str != last_display_str:
+        last_display_str = display_str
+        display.write(display_str)
+
 
 try:
     wifi_connect()
@@ -243,20 +282,22 @@ try:
         if lights_enabled and time.ticks_diff(now, last_sys_led_change) > 200:
             sys_led.value(not sys_led.value())
             last_sys_led_change = time.ticks_ms()
-            
+
         # We update each sensor, if it's time, and store the expected time
         # until we next need to poll the sensor.
         for index, sensor in enumerate(sensors):
             last_check = sensor_check_times[index]
             check_delta = time.ticks_diff(now, last_check)
-            time_to_poll =  sensor.poll_rate_ms - check_delta
-            #print("check for {}, delta: {}, poll_rate: {}, ttp: {}".format(sensor.id, check_delta, sensor.poll_rate_ms, time_to_poll))
+            time_to_poll = sensor.poll_rate_ms - check_delta
+            # print("check for {}, delta: {}, poll_rate: {}, ttp: {}".format(sensor.id, check_delta, sensor.poll_rate_ms, time_to_poll))
             if time_to_poll <= 0:
                 update_sensor(sensor)
                 time_to_poll = sensor.poll_rate_ms
                 sensor_check_times[index] = now
             sensor_next_polls.append(time_to_poll)
 
+        # Update the LCD to current sensor status
+        update_display_with_sensor_status()
 
         # We look to the minimum next poll and attempt to sleep until then
         next_poll = min(sensor_next_polls)

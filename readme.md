@@ -6,6 +6,11 @@ Much of this will be messy and might not even work. I don't really know python e
 
 Devices built have their own folders with their current script state, and readme to document that specific device.
 
+### License
+
+My code within this repo is licensed under MIT as per the LICENSE file.
+PDF datasheets, and files with their own copyright/license shown, are under the original license and copyright of their authors and should not be considered licenses via the LICENSE file.
+
 ### Variables
 
 Common variables and secrets should be within a `config.py` file. This will need to be uploaded to the Pico before running any scripts that depend on it. An example with all variables can be found in `config.example.py`.

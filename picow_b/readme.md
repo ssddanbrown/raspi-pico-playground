@@ -13,6 +13,13 @@ Living-located proximity, temperature, humidity and CO2 sensor to link into home
 - HW-416 PIR Sensor
 - Push button
 - Red + Green LEDs
+- HD44780 based display
+- Potentiometer for display brightness control.
+- TODO - Transistor to allow control of display LED?
 
 ### Lessons
+
+Become a lot more confident with binary-level operations from writing the sensor and display drivers for this. Also learnt the lower-level I2C work and the display serial-like communication methods.
+
+On the display, the LED consumes a massive amount of power relative to everything else (incl. pico, excl. sensors) when powered on.
 

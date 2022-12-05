@@ -101,3 +101,13 @@ This does much of the heavily lifting since raw ic2 communication requires a bac
 - [Datasheet](https://files.seeedstudio.com/wiki/Grove-CO2&Temperature&HumiditySensor-SCD4/res/Sensirion_CO2_Sensors_SCD4x_Datasheet.pdf)
 - [Wiki Page](https://wiki.seeedstudio.com/Grove-CO2_&_Temperature_&_Humidity_Sensor-SCD41/)
 - [Python Lib](https://sensirion.github.io/python-i2c-scd/installation.html)
+
+Wrote a custom `scd41.py` class for this sensor as I could not find a simple compatible existing driver.
+
+##### 16 x 2 LCD Display
+
+- Craftdata BC1602A
+- Uses HD44780 controller
+- [Datasheet](https://www.sparkfun.com/datasheets/LCD/HD44780.pdf)
+
+Wrote a custom `hd44780.py` driver for this display.

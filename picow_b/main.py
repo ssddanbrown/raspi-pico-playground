@@ -27,6 +27,7 @@ lcd_data4 = machine.Pin(8, machine.Pin.OUT)
 lcd_data5 = machine.Pin(9, machine.Pin.OUT)
 lcd_data6 = machine.Pin(10, machine.Pin.OUT)
 lcd_data7 = machine.Pin(11, machine.Pin.OUT)
+lcd_led_pow = machine.Pin(19, machine.Pin.OUT) # Transistor controlled LCD LED power
 
 # thc_pow = machine.Pin(10, machine.Pin.OUT, None, value=1)
 thc_sda = machine.Pin(14)  # thc = temp+humidity+CO2 (SCD41)
@@ -120,12 +121,14 @@ def button_handler(pin):
             lights_enabled = not lights_enabled
             print("Toggling lights {} from button press".format("on" if lights_enabled else "off"))
             r_led.value(lights_enabled)
+            lcd_led_pow.value(lights_enabled)
             w_led.off()
             sys_led.off()
 
 
 btn.irq(handler=button_handler, trigger=machine.Pin.IRQ_RISING | machine.Pin.IRQ_FALLING)
 r_led.on()
+lcd_led_pow.on()
 
 
 # Sensor logic

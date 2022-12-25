@@ -13,25 +13,25 @@ device_id = device_name.lower().replace(' ', '_')
 
 # LED Pins
 sys_led = machine.Pin("LED", machine.Pin.OUT)
-w_led = machine.Pin(17, machine.Pin.OUT)
-r_led = machine.Pin(16, machine.Pin.OUT)
+w_led = machine.Pin(4, machine.Pin.OUT)
+r_led = machine.Pin(3, machine.Pin.OUT)
 w_led.off()
 
 # Input/IO Pins
-btn = machine.Pin(18, machine.Pin.IN, machine.Pin.PULL_DOWN)
-m_sens = machine.Pin(0, machine.Pin.IN, machine.Pin.PULL_DOWN)
+btn = machine.Pin(0, machine.Pin.IN, machine.Pin.PULL_DOWN)
+m_sens = machine.Pin(7, machine.Pin.IN, machine.Pin.PULL_DOWN)
 
-lcd_rs = machine.Pin(6, machine.Pin.OUT)
-lcd_enable = machine.Pin(7, machine.Pin.OUT)
-lcd_data4 = machine.Pin(8, machine.Pin.OUT)
-lcd_data5 = machine.Pin(9, machine.Pin.OUT)
-lcd_data6 = machine.Pin(10, machine.Pin.OUT)
-lcd_data7 = machine.Pin(11, machine.Pin.OUT)
-lcd_led_pow = machine.Pin(19, machine.Pin.OUT) # Transistor controlled LCD LED power
+lcd_rs = machine.Pin(28, machine.Pin.OUT)
+lcd_enable = machine.Pin(27, machine.Pin.OUT)
+lcd_data4 = machine.Pin(26, machine.Pin.OUT)
+lcd_data5 = machine.Pin(22, machine.Pin.OUT)
+lcd_data6 = machine.Pin(21, machine.Pin.OUT)
+lcd_data7 = machine.Pin(20, machine.Pin.OUT)
+lcd_led_pow = machine.Pin(18, machine.Pin.OUT) # Transistor controlled LCD LED power
 
 # thc_pow = machine.Pin(10, machine.Pin.OUT, None, value=1)
-thc_sda = machine.Pin(14)  # thc = temp+humidity+CO2 (SCD41)
-thc_scl = machine.Pin(15)
+thc_sda = machine.Pin(10)  # thc = temp+humidity+CO2 (SCD41)
+thc_scl = machine.Pin(11)
 
 # Globals
 mqtt_client = None

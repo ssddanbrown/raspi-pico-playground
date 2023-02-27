@@ -68,12 +68,13 @@ def mqtt_connect():
     )
     client.connect(True)
     print('Connected to %s MQTT Broker' % (config.mqtt_server))
+    r_led.on()
     return client
 
 
 def reconnect():
     print('Failed to connect to the MQTT Broker. Reconnecting...')
-    time.sleep(5)
+    time.sleep(15)
     machine.reset()
 
 
@@ -107,7 +108,7 @@ def button_handler(pin):
                 r_led.off()
                 time.sleep(1)
             machine.reset()
-        else:
+        elif press_time > 200:
             # Toggle lights on short press
             lights_enabled = not lights_enabled
             print("Toggling lights {} from button press".format("on" if lights_enabled else "off"))
@@ -117,7 +118,6 @@ def button_handler(pin):
 
 
 btn.irq(handler=button_handler, trigger=machine.Pin.IRQ_RISING|machine.Pin.IRQ_FALLING)
-r_led.on()
 
 # Sensor logic
 
@@ -264,4 +264,5 @@ try:
             time.sleep_ms(next_poll)
 
 except OSError as e:
+    r_led.off()
     reconnect()

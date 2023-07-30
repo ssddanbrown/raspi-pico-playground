@@ -16,6 +16,8 @@ sys_led = machine.Pin("LED", machine.Pin.OUT)
 g_led = machine.Pin(22, machine.Pin.OUT)
 r_led = machine.Pin(28, machine.Pin.OUT)
 g_led.off()
+r_led.off()
+sys_led.off()
 
 # Input/IO Pins
 btn = machine.Pin(1, machine.Pin.IN, machine.Pin.PULL_DOWN)
@@ -27,6 +29,7 @@ th_scl = machine.Pin(21)
 
 # Globals
 mqtt_client = None
+wlan = None
 
 # Busses & Wrapped Sensors
 i2c0 = machine.I2C(0, sda=th_sda, scl=th_scl, freq=100000)
@@ -47,15 +50,16 @@ def wifi_connect():
             break
         max_wait -= 1
         print('waiting for connection...')
-        time.sleep(1)
+        time.sleep(3)
 
     # Handle connection error
     if wlan.status() != 3:
         raise RuntimeError('network connection failed')
-    else:
-        print('connected')
-        status = wlan.ifconfig()
-        print('ip = ' + status[0])
+
+    print('connected')
+    status = wlan.ifconfig()
+    print('ip = ' + status[0])
+    return wlan
 
 
 def mqtt_connect():
@@ -73,10 +77,25 @@ def mqtt_connect():
 
 
 def reconnect():
-    print('Failed to connect to the MQTT Broker. Reconnecting...')
-    time.sleep(15)
-    machine.reset()
+    global wlan
+    global mqtt_client
+    r_led.off()
+    print('Failed to connect to the MQTT Broker. Waiting 15 seconds then reconnecting...')
+    wlan = wifi_connect()
+    mqtt_client = mqtt_connect()
 
+def reset():
+    r_led.on()
+    time.sleep(2)
+    r_led.off()
+    time.sleep(2)
+    print('Failed with error. Waiting 15 seconds then resetting')
+    time.sleep(11)
+    r_led.on()
+    time.sleep(.5)
+    r_led.off()
+    machine.reset()
+    
 
 # Button and light handling
 
@@ -123,6 +142,8 @@ btn.irq(handler=button_handler, trigger=machine.Pin.IRQ_RISING|machine.Pin.IRQ_F
 
 
 def update_sensor_mqtt_state(sensor):
+    if wlan.isconnected() is False:
+        return reconnect()
     state_topic = 'homeassistant/{type}/{id}/state'.format(type=sensor.type, id=sensor.id)
     mqtt_client.publish(state_topic.encode(), sensor.status.encode())
 
@@ -221,7 +242,7 @@ proximity_sensor.add_on_change_handler((lambda val, sensor: g_led.value(lights_e
 proximity_sensor.add_on_change_handler((lambda val, sensor: print("Proximity:" + val)))
 
 try:
-    wifi_connect()
+    wlan = wifi_connect()
     mqtt_client = mqtt_connect()
     sensor_check_times = []
     last_sys_led_change = time.ticks_ms()
@@ -263,6 +284,5 @@ try:
         if next_poll > 0:
             time.sleep_ms(next_poll)
 
-except OSError as e:
-    r_led.off()
-    reconnect()
+except:
+    reset()

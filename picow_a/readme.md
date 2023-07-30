@@ -1,6 +1,8 @@
 # Picow A
 
-This readme defines the use and lessons of the Raspberry Pico that I created.
+This readme defines the use and lessons of the Raspberry Pico-based sensor module that I created.
+
+![Custom 3d printed sensor case, open showing components](box_open.webp)
 
 ### Intended Usage
 

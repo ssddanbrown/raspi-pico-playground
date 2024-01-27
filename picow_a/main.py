@@ -5,6 +5,7 @@ import network
 from umqtt.simple import MQTTClient
 import config
 from libraries import ahtx0
+import rp2
 
 # https://mpython.readthedocs.io/en/master/library/mPython/umqtt.simple.html
 
@@ -38,13 +39,15 @@ th_sensor = ahtx0.AHT10(i2c0)
 
 # Wifi & MQTT
 
+rp2.country('GB')
 def wifi_connect():
     wlan = network.WLAN(network.STA_IF)
     wlan.active(True)
-    # wlan.config(pm=0xa11140)  # Disable power-save mode
+    wlan.config(pm=0xa11140)  # Disable power-save mode
     wlan.connect(config.wifi_ssid, config.wifi_pass)
+    
     # Wait for connect or fail
-    max_wait = 10
+    max_wait = 20
     while max_wait > 0:
         if wlan.status() < 0 or wlan.status() >= 3:
             break
@@ -54,6 +57,7 @@ def wifi_connect():
 
     # Handle connection error
     if wlan.status() != 3:
+        print('wlan status = ' + str(wlan.status()))
         raise RuntimeError('network connection failed')
 
     print('connected')
@@ -284,5 +288,6 @@ try:
         if next_poll > 0:
             time.sleep_ms(next_poll)
 
-except:
+except Exception as err:
+    print("An error occurred:", err)
     reset()
